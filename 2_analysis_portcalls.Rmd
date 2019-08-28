@@ -313,15 +313,15 @@ sankeyNetwork(
 
 ```
 
-Volgende stap is het vergelijken van schepen die naar dezelfde Nederlandse haven terugkeren
+Analyse hoe snel schepen naar dezelfde NL'se haven terugkeren
 
 ```{r rdam_return_vs_rest, echo = FALSE, message = FALSE, warning = FALSE}
 
-# Selectie schepen die in Rotterdam zijn geweest; schepen die binnen 4 uur terug zijn gekeerd labelen
+# Selectie schepen die terugkeren naar dezelfde Nederlandse haven
 portcalls_selectie <-
   portcalls %>%
-  filter(Port.Name == "Rotterdam") %>%
-  mutate(return_4h = if_else(Time_travel_h < 4,1,0))
+  filter(Port.Name == Previous_port,
+         Country.Code == "NL")
 
 # Eerst ID's voor de nodes aanmaken
 nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
