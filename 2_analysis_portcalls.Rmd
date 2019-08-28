@@ -1,0 +1,357 @@
+---
+title: "Portcalls"
+output: html_document
+---
+
+```{r load_packages, echo = FALSE, message = FALSE, warning = FALSE}
+# Packages
+library(dplyr)
+library(ggplot2)
+library(networkD3)
+```
+
+```{r load_data, echo = FALSE, message = FALSE, warning = FALSE}
+# Data inladen
+load("D:/Projecten/19_0003_Zicht_op_afvallozingen_met_AIS/Data/1_reading_cleaning/Portcalls_EU_1518_preproc.Rda")
+```
+
+We werken met alle portcalls uit JASPER van 2015 t/m 2018 van alle landen. Grofweg gaat het om de gehele Europese kustlijn.
+
+Om beter te weten waar we het over hebben, eerst een telling van het aantal portcalls per schip in een histogram.
+
+```{r n_portcalls_all, echo = FALSE, message = FALSE, warning = FALSE}
+
+ship_freq <- portcalls %>% group_by(IMO.Number) %>% summarise(count = n()) %>% arrange(desc(count))
+
+ggplot(data = ship_freq, aes(x=count)) +
+  geom_histogram(binwidth = 100, colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  xlab("Aantal portcalls") +
+  ylab("Aantal schepen") +
+  ggtitle("Aantal portcalls per schip van 2015 t/m 2018")
+
+```
+
+Zelfde plaatje, maar dan alleen voor de portcalls van Nederlandse havens
+
+```{r n_portcalls_NL, echo = FALSE, message = FALSE, warning = FALSE}
+
+ship_freq_NL <- portcalls %>%
+  filter(Country.Code == 'NL') %>%
+  group_by(IMO.Number) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+
+ggplot(data = ship_freq_NL, aes(x=count)) +
+  geom_histogram(binwidth = 100, colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  xlab("Aantal portcalls") +
+  ylab("Aantal schepen") +
+  ggtitle("Aantal portcalls per schip in Nederlandse havens van 2015 t/m 2018")
+
+```
+
+
+Inzoomen op de lagere aantallen portcalls; dit zijn verreweg de meeste schepen.
+
+```{r n_portcalls_low, echo = FALSE, message = FALSE, warning = FALSE}
+
+ship_freq_NL_100 <- ship_freq_NL %>% filter(count <= 100)
+
+ggplot(data = ship_freq_NL_100, aes(x=count)) +
+  geom_histogram(binwidth = 1, colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  xlab("Aantal portcalls") +
+  ylab("Aantal schepen") +
+  ggtitle("Aantal portcalls per schip in Nederlandse havens van 2015 t/m 2018 (max. 100)")
+```
+
+Welke Nederlandse havens worden hoe vaak aangedaan?
+
+```{r n_ports_NL, echo = FALSE, message = FALSE, warning = FALSE}
+port_freq_NL <- portcalls %>%
+  filter(Country.Code == 'NL') %>%
+  group_by(Port.Name) %>%
+  summarise(count = n()) %>%
+  mutate(pct = count / sum(count)) %>%
+  arrange(desc(count))
+
+total_value = sum(port_freq_NL$count)
+port_freq_NL$Port.Name <- factor(port_freq_NL$Port.Name, levels = port_freq_NL$Port.Name[order(desc(port_freq_NL$count))])
+
+ggplot(data = port_freq_NL, aes(x=Port.Name, y=count)) +
+  geom_bar(width = 1, stat = "identity", colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  scale_y_continuous(sec.axis = sec_axis(~(./total_value)*100, name = "Percentage")) +
+  xlab("Haven") +
+  ylab("Aantal portcalls") +
+  ggtitle("Aantal en percentage portcalls Nederlandse havens in 2015 t/m 2018") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+
+Het is de vraag in hoeverre een schip een nieuwe portcall doet op het moment dat het kort de haven uit en weer in gaat. Om hier inzicht in te krijgen, aantal dagen tussen portcalls in een grafiek weergeven, met onderscheid tussen:<br>
+- schip gaat van haven naar een andere haven<br>
+- schip gaat van haven terug naar dezelfde haven
+
+```{r days_between_portcalls, echo = FALSE, message = FALSE, warning = FALSE}
+
+days_between_portcalls <-
+  portcalls %>%
+  select(Port.Call.ID, Return_to_same_port, Time_lag_Sent_d) %>%
+  filter(!is.na(Time_lag_Sent_d),
+         Time_lag_Sent_d <= 31)
+
+ggplot(data = days_between_portcalls, aes(x = Time_lag_Sent_d, group = Return_to_same_port, fill = Return_to_same_port)) +
+  geom_histogram(position = "stack", binwidth = 1, alpha = "0.5") +
+  xlab("Aantal dagen tussen portcalls") +
+  ylab("Aantal portcalls") +
+  ggtitle("Aantal dagen tussen portcalls (max. 1 maand)")
+
+
+```
+
+Dezelfde grafiek, maar dan op basis van het aantal uren en binnen maximaal 24u:
+
+```{r hours_between_portcalls, echo = FALSE, message = FALSE, warning = FALSE}
+
+hours_between_portcalls <-
+  portcalls %>%
+  select(Port.Call.ID, Return_to_same_port, Time_lag_Sent_h) %>%
+  filter(!is.na(Time_lag_Sent_h),
+         Time_lag_Sent_h <= 24)
+
+ggplot(data = hours_between_portcalls, aes(x = Time_lag_Sent_h, group = Return_to_same_port, fill = Return_to_same_port)) +
+  geom_histogram(position = "stack", binwidth = 1, alpha = "0.5") +
+  xlab("Aantal uren tussen portcalls") +
+  ylab("Aantal portcalls") +
+  ggtitle("Aantal uren tussen portcalls (max. 1 dag)")
+
+
+```
+
+Nu dezelfde analyse, maar dan voor het verschil tussen vertrek en aankomst. Hoe lang is het schip onderweg geweest (inclusief mogelijk een of meerdere stops in niet-Europese havens)? En keert het schip terug in dezelfde haven of in een andere haven. Te beginnen weer uitgedrukt in aantal dagen met een maximum van één maand.
+
+```{r days_travel, echo = FALSE, message = FALSE, warning = FALSE}
+
+days_travel <-
+  portcalls %>%
+  select(Port.Call.ID, Return_to_same_port, Time_travel_d) %>%
+  filter(!is.na(Time_travel_d),
+         Time_travel_d <= 31)
+
+ggplot(data = days_travel, aes(x = Time_travel_d, group = Return_to_same_port, fill = Return_to_same_port)) +
+  geom_histogram(position = "stack", binwidth = 1, alpha = "0.5") +
+  xlab("Aantal dagen onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Aantal dagen onderweg (max. 1 maand)")
+
+
+```
+
+Nu zoomen we in op Rotterdam, waar we bekijken wat de volgende bestemming van schepen is als ze kort weg zijn. In dit geval bekijken we de situatie waarbij schepen binnen 3 uur weer in een haven zijn met Rotterdam als vertrekhaven.
+
+```{r sankey_3h, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Selectie schepen, bijv. schepen die uit bepaalde haven komen en binnen 4 uur weer in een (andere of dezelfde) haven aankomen
+portcalls_sankey_selectie <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam",
+         Time_travel_h < 3)
+
+# Eerst ID's voor de nodes aanmaken
+nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
+                                     unique(portcalls_sankey_selectie$Previous_port))))
+names(nodes) <- 'namen'
+nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
+nodes$ID <- seq.int(nrow(nodes)) - 1
+
+data_aggr <-
+  portcalls_sankey_selectie %>%
+  filter(!is.na(Previous_port)) %>%
+  left_join(nodes, by = c("Previous_port" = "namen")) %>%
+  rename(port1 = ID) %>%
+  left_join(nodes, by = c("Port.Name" = "namen")) %>%
+  rename(port2 = ID) %>%
+  group_by(port1, port2) %>%
+  summarise(aantal = n())
+
+sankeyNetwork(
+  Links = data_aggr,
+  Nodes = nodes,
+  Source = "port1",
+  Target = "port2",
+  Value = "aantal",
+  NodeID = "namen",
+  fontSize = 12,
+  nodeWidth = 30,
+  sinksRight = FALSE
+  #,iterations = 1
+)
+
+```
+
+Nu dezelfde analyse, maar voor een iets langere tijdsduur (binnen 4 uur).
+
+```{r sankey_4h, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Selectie schepen, bijv. schepen die uit bepaalde haven komen en binnen 5 uur weer in een (andere of dezelfde) haven aankomen
+portcalls_sankey_selectie <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam",
+         Time_travel_h < 4)
+
+# Eerst ID's voor de nodes aanmaken
+nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
+                                     unique(portcalls_sankey_selectie$Previous_port))))
+names(nodes) <- 'namen'
+nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
+nodes$ID <- seq.int(nrow(nodes)) - 1
+
+data_aggr <-
+  portcalls_sankey_selectie %>%
+  filter(!is.na(Previous_port)) %>%
+  left_join(nodes, by = c("Previous_port" = "namen")) %>%
+  rename(port1 = ID) %>%
+  left_join(nodes, by = c("Port.Name" = "namen")) %>%
+  rename(port2 = ID) %>%
+  group_by(port1, port2) %>%
+  summarise(aantal = n())
+
+sankeyNetwork(
+  Links = data_aggr,
+  Nodes = nodes,
+  Source = "port1",
+  Target = "port2",
+  Value = "aantal",
+  NodeID = "namen",
+  fontSize = 12,
+  nodeWidth = 30,
+  sinksRight = FALSE
+  #,iterations = 1
+)
+
+```
+
+En nog een keer, maar voor een nog iets langere tijdsduur (binnen 5 uur).
+
+```{r sankey_5h, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Selectie schepen, bijv. schepen die uit bepaalde haven komen en binnen 5 uur weer in een (andere of dezelfde) haven aankomen
+portcalls_sankey_selectie <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam",
+         Time_travel_h < 5)
+
+# Eerst ID's voor de nodes aanmaken
+nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
+                                     unique(portcalls_sankey_selectie$Previous_port))))
+names(nodes) <- 'namen'
+nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
+nodes$ID <- seq.int(nrow(nodes)) - 1
+
+data_aggr <-
+  portcalls_sankey_selectie %>%
+  filter(!is.na(Previous_port)) %>%
+  left_join(nodes, by = c("Previous_port" = "namen")) %>%
+  rename(port1 = ID) %>%
+  left_join(nodes, by = c("Port.Name" = "namen")) %>%
+  rename(port2 = ID) %>%
+  group_by(port1, port2) %>%
+  summarise(aantal = n())
+
+sankeyNetwork(
+  Links = data_aggr,
+  Nodes = nodes,
+  Source = "port1",
+  Target = "port2",
+  Value = "aantal",
+  NodeID = "namen",
+  fontSize = 12,
+  nodeWidth = 30,
+  sinksRight = FALSE
+  #,iterations = 1
+)
+
+```
+
+Het omslagpunt voor terugkeer naar dezelfde haven blijkt dus bij 4 uur te liggen; zijn schepen langer weg, dan is de kans op terugkeer naar Rotterdam klein; bij een reisduur van minder dan 4 uur is de kans op terugkeer beduidend groter. Uiteraard geldt dit specifiek voor Rotterdam. Voor Vlissingen ziet dit er met dezelfde selectie (< 4 uur), bijvoorbeeld heel anders uit.
+
+```{r sankey_4h_vlis, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Selectie schepen, bijv. schepen die uit bepaalde haven komen en binnen 5 uur weer in een (andere of dezelfde) haven aankomen
+portcalls_sankey_selectie <-
+  portcalls %>%
+  filter(Previous_port == "Vlissingen",
+         Time_travel_h < 4)
+
+# Eerst ID's voor de nodes aanmaken
+nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
+                                     unique(portcalls_sankey_selectie$Previous_port))))
+names(nodes) <- 'namen'
+nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
+nodes$ID <- seq.int(nrow(nodes)) - 1
+
+data_aggr <-
+  portcalls_sankey_selectie %>%
+  filter(!is.na(Previous_port)) %>%
+  left_join(nodes, by = c("Previous_port" = "namen")) %>%
+  rename(port1 = ID) %>%
+  left_join(nodes, by = c("Port.Name" = "namen")) %>%
+  rename(port2 = ID) %>%
+  group_by(port1, port2) %>%
+  summarise(aantal = n())
+
+sankeyNetwork(
+  Links = data_aggr,
+  Nodes = nodes,
+  Source = "port1",
+  Target = "port2",
+  Value = "aantal",
+  NodeID = "namen",
+  fontSize = 12,
+  nodeWidth = 30,
+  sinksRight = FALSE
+  #,iterations = 1
+)
+
+```
+
+Volgende stap is het vergelijken van schepen die naar dezelfde Nederlandse haven terugkeren
+
+```{r rdam_return_vs_rest, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Selectie schepen die in Rotterdam zijn geweest; schepen die binnen 4 uur terug zijn gekeerd labelen
+portcalls_selectie <-
+  portcalls %>%
+  filter(Port.Name == "Rotterdam") %>%
+  mutate(return_4h = if_else(Time_travel_h < 4,1,0))
+
+# Eerst ID's voor de nodes aanmaken
+nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
+                                     unique(portcalls_sankey_selectie$Previous_port))))
+names(nodes) <- 'namen'
+nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
+nodes$ID <- seq.int(nrow(nodes)) - 1
+
+data_aggr <-
+  portcalls_sankey_selectie %>%
+  filter(!is.na(Previous_port)) %>%
+  left_join(nodes, by = c("Previous_port" = "namen")) %>%
+  rename(port1 = ID) %>%
+  left_join(nodes, by = c("Port.Name" = "namen")) %>%
+  rename(port2 = ID) %>%
+  group_by(port1, port2) %>%
+  summarise(aantal = n())
+
+sankeyNetwork(
+  Links = data_aggr,
+  Nodes = nodes,
+  Source = "port1",
+  Target = "port2",
+  Value = "aantal",
+  NodeID = "namen",
+  fontSize = 12,
+  nodeWidth = 30,
+  sinksRight = FALSE
+  #,iterations = 1
+)
+
+```
+
