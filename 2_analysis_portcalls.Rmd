@@ -313,45 +313,31 @@ sankeyNetwork(
 
 ```
 
-Analyse hoe snel schepen naar dezelfde NL'se haven terugkeren
+Analyse hoe snel schepen naar dezelfde NL'se haven terugkeren en welke havens dat dan zijn
 
-```{r rdam_return_vs_rest, echo = FALSE, message = FALSE, warning = FALSE}
+```{r NL_port_return, echo = FALSE, message = FALSE, warning = FALSE}
 
-# Selectie schepen die terugkeren naar dezelfde Nederlandse haven
+# Selectie schepen die terugkeren naar dezelfde Nederlandse haven binnen 48u
 portcalls_selectie <-
   portcalls %>%
   filter(Port.Name == Previous_port,
-         Country.Code == "NL")
+         Country.Code == "NL",
+         Time_travel_h < 48)
 
-# Eerst ID's voor de nodes aanmaken
-nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
-                                     unique(portcalls_sankey_selectie$Previous_port))))
-names(nodes) <- 'namen'
-nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
-nodes$ID <- seq.int(nrow(nodes)) - 1
+# Aggregeren
+portcalls_NL_return <-
+  portcalls_selectie %>%
+  group_by(Time_travel_h, Port.Name) %>%
+  summarise(count = n())
 
-data_aggr <-
-  portcalls_sankey_selectie %>%
-  filter(!is.na(Previous_port)) %>%
-  left_join(nodes, by = c("Previous_port" = "namen")) %>%
-  rename(port1 = ID) %>%
-  left_join(nodes, by = c("Port.Name" = "namen")) %>%
-  rename(port2 = ID) %>%
-  group_by(port1, port2) %>%
-  summarise(aantal = n())
-
-sankeyNetwork(
-  Links = data_aggr,
-  Nodes = nodes,
-  Source = "port1",
-  Target = "port2",
-  Value = "aantal",
-  NodeID = "namen",
-  fontSize = 12,
-  nodeWidth = 30,
-  sinksRight = FALSE
-  #,iterations = 1
-)
+# Bar chart
+ggplot(data = portcalls_NL_return, aes(x=Time_travel_h, y=count, fill=Port.Name)) +
+  geom_bar(width = 1, stat = "identity", alpha = "0.5") +
+  scale_y_continuous(sec.axis = sec_axis(~(./total_value)*100, name = "Percentage")) +
+  xlab("Tijd onderweg") +
+  ylab("Aantal portcalls") +
+  ggtitle("Aantal portcalls naar reisduur in uren bij terugkeer naar dezelfde Nederlandse haven") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ```
 
