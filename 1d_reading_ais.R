@@ -38,7 +38,7 @@ AIS_selectie <-
   left_join(ships_rdam, by=c("t_imo", "t_imo")) %>%
   filter(t_updatetime > ATD_prev - 3600,
          t_updatetime < ATA_LT + 3600) %>%
-  select(t_imo, t_updatetime, t_longitude, t_latitude)
+  select(t_imo, X.ATA..Ship.Type.Description, t_updatetime, t_longitude, t_latitude)
 
 # Wegschrijven
 save(AIS_selectie, file="Data/1_reading_cleaning/AIS_selectie.Rda")
