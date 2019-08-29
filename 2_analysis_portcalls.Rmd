@@ -8,11 +8,14 @@ output: html_document
 library(dplyr)
 library(ggplot2)
 library(networkD3)
+library(leaflet)
+library(lubridate)
 ```
 
 ```{r load_data, echo = FALSE, message = FALSE, warning = FALSE}
 # Data inladen
-load("D:/Projecten/19_0003_Zicht_op_afvallozingen_met_AIS/Data/1_reading_cleaning/Portcalls_EU_1518_preproc.Rda")
+load("../Data/1_reading_cleaning/Portcalls_EU_1518_preproc.Rda")
+load("../Data/1_reading_cleaning/AIS_selectie.Rda")
 ```
 
 We werken met alle portcalls uit JASPER van 2015 t/m 2018 van alle landen. Grofweg gaat het om de gehele Europese kustlijn.
@@ -336,8 +339,93 @@ ggplot(data = portcalls_NL_return, aes(x=Time_travel_h, y=count, fill=Port.Name)
   scale_y_continuous(sec.axis = sec_axis(~(./total_value)*100, name = "Percentage")) +
   xlab("Tijd onderweg") +
   ylab("Aantal portcalls") +
-  ggtitle("Aantal portcalls naar reisduur in uren bij terugkeer naar dezelfde Nederlandse haven") +
+  ggtitle("Aantal portcalls naar reisduur in uren bij terugkeer naar dezelfde NL'se haven") +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
 ```
+
+Nu zoomen we weer in op Rotterdam en kijken we naar de meest voorkomende bestemmingen vanaf daar.
+
+```{r travel_time_rdam, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Tabel met reistijd bij bestemmingen vanuit Rotterdam
+rotter_dest <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam") %>%
+  group_by(Port.Name) %>%
+  summarise(count = n(),
+            median(Time_travel_h),
+            mean(Time_travel_h),
+            sd(Time_travel_h),
+            min(Time_travel_h),
+            max(Time_travel_h)) %>%
+  arrange(desc(count))
+
+```
+
+Inzoomen op reistijden Rotterdam <-> Immingham; Immingham is (op Rotterdam na) de meest voorkomende bestemming vanaf Rotterdam
+
+```{r rdam_imming, echo = FALSE, message = FALSE, warning = FALSE}
+
+rotter_imming <-
+  portcalls %>%
+  filter((Previous_port == "Rotterdam" & Port.Name == "Immingham") | (Previous_port == "Immingham" & Port.Name == "Rotterdam"))
+
+ggplot(data = rotter_imming, aes(x=Time_travel_h)) +
+  geom_density(colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Immingham")
+
+```
+
+Nu gefilterd op reistijd maximaal 48 uur en met onderscheid naar scheepstypes
+
+```{r rdam_imming_48h_type, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Terugbrengen naar maximaal 48 uur
+rotter_imming_48h <- rotter_imming %>% filter(Time_travel_h < 48)
+
+# Onderscheid maken naar scheepstypes
+ggplot(data = rotter_imming_48h, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
+  geom_histogram(binwidth = 1, colour = "#FF6666", alpha = "0.5") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Immingham (< 48u)")
+
+```
+
+
+Inzoomen op reistijden Rotterdam <-> Rotterdam, dit om op zoek te gaan naar zeezwaaiers
+
+```{r rdam_rdam, echo = FALSE, message = FALSE, warning = FALSE}
+
+rotter_rotter <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam" & Port.Name == "Rotterdam")
+
+ggplot(data = rotter_rotter, aes(x=Time_travel_h)) +
+  geom_density(colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Rotterdam")
+
+```
+
+Nu gefilterd op reistijd maximaal 96 uur en met onderscheid naar scheepstypes
+
+```{r rdam_rdam_96h_type, echo = FALSE, message = FALSE, warning = FALSE}
+
+rotter_rotter_96h <- rotter_rotter %>% filter(Time_travel_h < 96)
+
+ggplot(data = rotter_rotter_96h, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
+  geom_histogram(binwidth = 1, colour = "#FF6666", alpha = "0.5") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Rotterdam (< 96u)")
+
+```
+
+De vraag is nu: wie zijn de potentiële zeezwaaiers? Tankers of vergelijkbare schepen lijken het meest voor de hand liggend. Om hier casusgewijs op in te zoomen, de tankers selecteren die in mei 2017 Rotterdam uit en weer in gingen zonder tussenstops. Deze schepen kunnen opgezocht worden in de AIS-data om de routes nader te onderzoeken.
+Na ophalen van de AIS-data van deze schepen via Python, kunnen de coördinaten van de routes die deze schepen in mei 2017 hebben afgelegd op de kaart worden gezet.
 
