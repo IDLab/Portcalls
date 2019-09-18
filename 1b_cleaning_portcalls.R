@@ -35,8 +35,7 @@ if (FALSE) {
 # Verwijderen van overbodig geachte kolommen
 portcalls <-
   portcalls %>%
-  select(-External.System.ID,
-         -ATA.Is.Null,
+  select(-ATA.Is.Null,
          -ATD.Is.Null)
 
 # Maak numerieke variabelen waar niet mee gerekend kan worden character
@@ -82,11 +81,11 @@ portcalls <- portcalls %>% mutate(ATD_LT = ISOdatetime(substr(ATD_LT,7,10),
                                                        substr(ATD_LT,18,19)))
 
 # Verwijder 'onmogelijke' portcalls:
-# - verzenddatum (Send.At) moet eerder zijn dan aankomsttijd (ATA)
+# - verzenddatum (Send.At) moet eerder zijn dan vertrektijd (ATD) (verzenddatum kan wel na ATA liggen)
 # - aankomst (ATA) moet eerder zijn dan vertrek (ATD) (tenzij vertrek nog niet heeft plaatsgevonden)
 # - verwijder portcalls waarbij de ATA buiten de jaren 2015 t/m 2018 valt
 # - verwijder portcalls waarbij de ATD later is dan de eerstvolgende ATA
-portcalls <- portcalls %>% filter(Sent.At < ATA_LT,
+portcalls <- portcalls %>% filter(Sent.At < ATD_LT,
                                   (ATA_LT < ATD_LT) | is.na(ATD_LT),
                                   year(ATA_LT) %in% c(2015:2018)) %>%
                            arrange(IMO.Number, ATA_LT) %>%
