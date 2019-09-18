@@ -412,19 +412,36 @@ ggplot(data = rotter_rotter, aes(x=Time_travel_h)) +
 
 ```
 
-Nu gefilterd op reistijd maximaal 96 uur en met onderscheid naar scheepstypes
+Nu gefilterd op reistijd maximaal 48 uur en met onderscheid naar scheepstypes
 
-```{r rdam_rdam_96h_type, echo = FALSE, message = FALSE, warning = FALSE}
+```{r rdam_rdam_48h_type, echo = FALSE, message = FALSE, warning = FALSE}
 
-rotter_rotter_96h <- rotter_rotter %>% filter(Time_travel_h < 96)
+rotter_rotter_48h <- rotter_rotter %>% filter(Time_travel_h < 48)
 
-ggplot(data = rotter_rotter_96h, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
-  geom_histogram(binwidth = 1, colour = "#FF6666", alpha = "0.5") +
+ggplot(data = rotter_rotter_48h, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
+  geom_histogram(binwidth = 1) +
   xlab("Tijd onderweg") +
   ylab("Aantal reizen") +
-  ggtitle("Reistijd Rotterdam <-> Rotterdam (< 96u)")
+  ggtitle("Reistijd Rotterdam <-> Rotterdam (< 48u)") +
+  theme(legend.position = "bottom")
+  
 
 ```
+
+```{r rdam_rdam_48h_type_sel, echo = FALSE, message = FALSE, warning = FALSE}
+rotter_rotter_48h_sel <-
+  rotter_rotter_48h %>%
+  filter(X.ATA..Ship.Type.Description %in%
+           c("Chemical tanker", "Combination carrier", "MODU & FPSO", "NLS tanker", "Oil tanker"))
+         
+ggplot(data = rotter_rotter_48h_sel, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
+  geom_histogram(binwidth = 1, colour = "white") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Rotterdam (< 48u)")
+         
+```
+
 
 De vraag is nu: wie zijn de potentiële zeezwaaiers? Tankers of vergelijkbare schepen lijken het meest voor de hand liggend. Om hier casusgewijs op in te zoomen, de tankers selecteren die in mei 2017 Rotterdam uit en weer in gingen zonder tussenstops. Deze schepen kunnen opgezocht worden in de AIS-data om de routes nader te onderzoeken.
 Na ophalen van de AIS-data van deze schepen via Python, kunnen de coördinaten van de routes die deze schepen in mei 2017 hebben afgelegd op de kaart worden gezet.
