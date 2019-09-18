@@ -7,7 +7,7 @@ load("Data/1_reading_cleaning/Portcalls_EU_1518_preproc.Rda")
 ships_rdam <-
   portcalls %>%
   filter(X.ATA..Ship.Type.Description %in%
-           c("Chemical tanker", "Combination carrier", "MODU & FPSO", "NLS tanker", "Oil tanker"),
+           c("Chemical tanker", "Combination carrier",  "MODU & FPSO", "NLS tanker", "Oil tanker"),
          Previous_port == "Rotterdam",
          Port.Name == "Rotterdam",
          year(ATA_LT) == 2017,
