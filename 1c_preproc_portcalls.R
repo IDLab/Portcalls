@@ -1,4 +1,5 @@
 library(dplyr)
+library(ggplot2)
 
 # Inladen data
 load("Data/1_reading_cleaning/Portcalls_EU_1518_schoon.Rda")
@@ -60,11 +61,25 @@ portcalls <-
                    as.numeric(NA)),
          Time_travel_d = round(Time_travel_h / 24))
 
+# Voeg relatieve reisduur toe. Dit is de reisduur voorafgaand aan de portcall gedeeld door de
+# gemiddelde reisduur voor dit traject (in uren).
+tab_traveltime <-
+  portcalls %>%
+  group_by(Port.Name, Previous_port) %>%
+  summarise(Time_travel_avg = mean(Time_travel_h))
+
+portcalls <-
+  portcalls %>%
+  left_join(tab_traveltime, by=c("Port.Name" = "Port.Name", "Previous_port" = "Previous_port")) %>%
+  mutate(Time_travel_h_rel = Time_travel_h / Time_travel_avg) %>%
+  select(-Time_travel_avg)
+
 # Bereken tijdsverschil arrival --> departure (hoe lang lag het schip in de haven?)  
 portcalls <-
   portcalls %>%
   mutate(Time_in_port_h = round((as.numeric(ATD_LT) - as.numeric(ATA_LT)) / 3600),
          Time_in_port_d = round(Time_in_port_h / 24))
+
 
 # Wegschrijven pre-processed databestand
 save(portcalls, file="Data/1_reading_cleaning/Portcalls_EU_1518_preproc.Rda")
