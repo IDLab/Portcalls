@@ -1,0 +1,173 @@
+---
+title: "Portcalls"
+output: html_document
+---
+
+```{r load_packages, echo = FALSE, message = FALSE, warning = FALSE}
+# Packages
+library(dplyr)
+library(ggplot2)
+library(networkD3)
+library(leaflet)
+library(lubridate)
+```
+
+```{r load_data, echo = FALSE, message = FALSE, warning = FALSE}
+# Data inladen
+load("../Data/1_reading_cleaning/Portcalls_EU_1518_preproc.Rda")
+load("../Data/1_reading_cleaning/AIS_selectie.Rda")
+```
+
+Hoe lang zijn schepen onderweg (heel Europa)?
+
+```{r days_travel, echo = FALSE, message = FALSE, warning = FALSE}
+
+days_travel <-
+  portcalls %>%
+  select(Port.Call.ID, Return_to_same_port, Time_travel_d) %>%
+  filter(!is.na(Time_travel_d),
+         Time_travel_d <= 31)
+
+ggplot(data = days_travel, aes(x = Time_travel_d, group = Return_to_same_port, fill = Return_to_same_port)) +
+  geom_histogram(position = "stack", binwidth = 1, alpha = "0.5") +
+  xlab("Aantal dagen onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Aantal dagen onderweg (max. 1 maand)")
+
+
+```
+
+```{r hours_travel, echo = FALSE, message = FALSE, warning = FALSE}
+
+hours_travel <-
+  portcalls %>%
+  select(Port.Call.ID, Return_to_same_port, Time_travel_h) %>%
+  filter(!is.na(Time_travel_h),
+         Time_travel_h <= 48)
+
+ggplot(data = hours_travel, aes(x = Time_travel_h, group = Return_to_same_port, fill = Return_to_same_port)) +
+  geom_histogram(position = "stack", binwidth = 1, alpha = "0.5") +
+  xlab("Aantal uren onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Aantal uren onderweg (max. 48 uur)")
+
+
+```
+
+Welke Nederlandse havens worden hoe vaak aangedaan?
+
+```{r n_ports_NL, echo = FALSE, message = FALSE, warning = FALSE}
+port_freq_NL <- portcalls %>%
+  filter(Country.Code == 'NL') %>%
+  group_by(Port.Name) %>%
+  summarise(count = n()) %>%
+  mutate(pct = count / sum(count)) %>%
+  arrange(desc(count))
+
+total_value = sum(port_freq_NL$count)
+port_freq_NL$Port.Name <- factor(port_freq_NL$Port.Name, levels = port_freq_NL$Port.Name[order(desc(port_freq_NL$count))])
+
+ggplot(data = port_freq_NL, aes(x=Port.Name, y=count)) +
+  geom_bar(width = 1, stat = "identity", colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  scale_y_continuous(sec.axis = sec_axis(~(./total_value)*100, name = "Percentage")) +
+  xlab("Haven") +
+  ylab("Aantal portcalls") +
+  ggtitle("Aantal en percentage portcalls Nederlandse havens in 2015 t/m 2018") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+Nu zoomen we in op Rotterdam, waar we bekijken wat de volgende bestemming van schepen is als ze kort weg zijn. In dit geval bekijken we de situatie waarbij schepen binnen 5 uur weer in een haven zijn met Rotterdam als vertrekhaven.
+
+```{r sankey_5h, echo = FALSE, message = FALSE, warning = FALSE}
+
+# Selectie schepen, bijv. schepen die uit bepaalde haven komen en binnen 5 uur weer in een (andere of dezelfde) haven aankomen
+portcalls_sankey_selectie <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam",
+         Time_travel_h < 5)
+
+# Eerst ID's voor de nodes aanmaken
+nodes <- as.data.frame(unique(append(unique(portcalls_sankey_selectie$Port.Name),
+                                     unique(portcalls_sankey_selectie$Previous_port))))
+names(nodes) <- 'namen'
+nodes <- nodes %>% arrange(namen) %>% filter(!is.na(namen))
+nodes$ID <- seq.int(nrow(nodes)) - 1
+
+data_aggr <-
+  portcalls_sankey_selectie %>%
+  filter(!is.na(Previous_port)) %>%
+  left_join(nodes, by = c("Previous_port" = "namen")) %>%
+  rename(port1 = ID) %>%
+  left_join(nodes, by = c("Port.Name" = "namen")) %>%
+  rename(port2 = ID) %>%
+  group_by(port1, port2) %>%
+  summarise(aantal = n())
+
+sankeyNetwork(
+  Links = data_aggr,
+  Nodes = nodes,
+  Source = "port1",
+  Target = "port2",
+  Value = "aantal",
+  NodeID = "namen",
+  fontSize = 12,
+  nodeWidth = 30,
+  sinksRight = FALSE
+  #,iterations = 1
+)
+
+```
+
+
+
+Inzoomen op reistijden Rotterdam <-> Rotterdam, dit om op zoek te gaan naar zeezwaaiers
+
+```{r rdam_rdam, echo = FALSE, message = FALSE, warning = FALSE}
+
+rotter_rotter <-
+  portcalls %>%
+  filter(Previous_port == "Rotterdam" & Port.Name == "Rotterdam")
+
+ggplot(data = rotter_rotter, aes(x=Time_travel_h)) +
+  geom_density(colour = "#FF6666", fill = "#FF6666", alpha = "0.5") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Rotterdam")
+
+```
+
+
+Nu gefilterd op reistijd maximaal 48 uur en met onderscheid naar scheepstypes
+
+```{r rdam_rdam_48h_type, echo = FALSE, message = FALSE, warning = FALSE}
+
+rotter_rotter_48h <- rotter_rotter %>% filter(Time_travel_h < 48)
+
+ggplot(data = rotter_rotter_48h, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
+  geom_histogram(binwidth = 1) +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Rotterdam (< 48u)") +
+  theme(legend.position = "bottom")
+  
+
+```
+
+```{r rdam_rdam_48h_type_sel, echo = FALSE, message = FALSE, warning = FALSE}
+rotter_rotter_48h_sel <-
+  rotter_rotter_48h %>%
+  filter(X.ATA..Ship.Type.Description %in%
+           c("Chemical tanker", "Combination carrier", "MODU & FPSO", "NLS tanker", "Oil tanker"))
+         
+ggplot(data = rotter_rotter_48h_sel, aes(x=Time_travel_h, fill=X.ATA..Ship.Type.Description)) +
+  geom_histogram(binwidth = 1, colour = "white") +
+  xlab("Tijd onderweg") +
+  ylab("Aantal reizen") +
+  ggtitle("Reistijd Rotterdam <-> Rotterdam (< 48u)")
+         
+```
+
+
+De vraag is nu: wie zijn de potentiële zeezwaaiers? Tankers of vergelijkbare schepen lijken het meest voor de hand liggend. Om hier casusgewijs op in te zoomen, de tankers selecteren die in mei 2017 Rotterdam uit en weer in gingen zonder tussenstops. Deze schepen kunnen opgezocht worden in de AIS-data om de routes nader te onderzoeken.
+Na ophalen van de AIS-data van deze schepen via Python, kunnen de coördinaten van de routes die deze schepen in mei 2017 hebben afgelegd op de kaart worden gezet.
+
