@@ -28,27 +28,39 @@ AIS_selectie <-
   )
   )
 
+min_lon = min(AIS_selectie$t_longitude)
+max_lon = max(AIS_selectie$t_longitude)
+min_lat = min(AIS_selectie$t_latitude)
+max_lat = max(AIS_selectie$t_latitude)
 
 ui <- fluidPage(
   
-  titlePanel("Op zoek naar zeezwaaiers"),
+  titlePanel("Zeezwaaien"),
   
   fluidRow(
     
     column(4, offset = 1,
            
-    sliderInput(inputId = "t_updatetime", label = "Datum en tijd",
+           fluidRow(selectInput("ship",
+                                "Kies een schip:",
+                                choices = sort(unique(AIS_selectie$ship))))
+    ),
+    
+    column(4, offset = 1,
+           
+           sliderInput(inputId = "t_updatetime", label = "Datum en tijd",
                        min = min(AIS_selectie$t_updatetime), 
                        max = max(AIS_selectie$t_updatetime),
                        value = min(AIS_selectie$t_updatetime),
                        step=60,
                        animate = animationOptions(interval = 1))
     )
+    
   ),
   
   fluidRow(
     
-    column(4, offset = 1,
+    column(12,
            
            fluidRow(leafletOutput("AIS_map"))
     )
@@ -56,16 +68,31 @@ ui <- fluidPage(
 )
 
 server <- function(input, output, session) {
-  
-  points <- reactive({
-    AIS_selectie %>% filter(t_updatetime == input$t_updatetime)
-  })
-  
+
   output$AIS_map <- renderLeaflet({
     leaflet() %>%
       addTiles() %>%
-      addCircleMarkers(lng= c(2,4), lat=c(51.5,54), radius=1, stroke = F, fill = F)
-      
+      addCircleMarkers(lng=min_lon, lat=min_lat, radius=1, stroke = F, fill = F) %>%
+      addCircleMarkers(lng=max_lon, lat=max_lat, radius=1, stroke = F, fill = F)
+  })
+    
+  observeEvent(input$ship, {
+    leafletProxy("AIS_map") %>%
+      clearMarkers()
+  })
+  
+  observe({
+    sel <- AIS_selectie %>% filter(ship == input$ship)
+    val <- min(sel$t_updatetime)
+    min_val <- min(sel$t_updatetime)
+    max_val <- max(sel$t_updatetime)
+    updateSliderInput(session, "t_updatetime", value = val, min = min_val, max = max_val)
+  })
+  
+  points <- reactive({
+    AIS_selectie %>%
+      filter(t_updatetime == input$t_updatetime,
+             ship == input$ship)
   })
   
   observeEvent(input$t_updatetime, {
